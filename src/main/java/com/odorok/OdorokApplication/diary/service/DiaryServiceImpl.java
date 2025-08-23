@@ -55,13 +55,23 @@ public class DiaryServiceImpl implements DiaryService{
     @Value("${gpt.generation-finalize-diary-prompt}")
     private String generationFinalizeDiaryPrompt;
     // 일지 생성권 itemId 캐싱.
-    @PostConstruct
-    public void initDiaryItemId() {
-        this.diaryPermissionItemId = itemRepository.findByTitle("일지 생성권")
-                .map(Item::getId)
-                .orElseThrow(() ->
-                        new IllegalStateException("'일지 생성권' 아이템이 DB에 없습니다. 서버 실행 중단. 데이터 삽입을 확인하세요.")
-                );
+//    @PostConstruct
+//    public void initDiaryItemId() {
+//        this.diaryPermissionItemId = itemRepository.findByTitle("일지 생성권")
+//                .map(Item::getId)
+//                .orElseThrow(() ->
+//                        new IllegalStateException("'일지 생성권' 아이템이 DB에 없습니다. 서버 실행 중단. 데이터 삽입을 확인하세요.")
+//                );
+//    }
+    private Long getDiaryPermissionItemId() {
+        if (diaryPermissionItemId == null) {
+            diaryPermissionItemId = itemRepository.findByTitle("일지 생성권")
+                    .map(Item::getId)
+                    .orElseThrow(() -> new IllegalStateException(
+                            "'일지 생성권' 아이템이 DB에 없습니다. 초기 데이터 삽입을 확인하세요."
+                    ));
+        }
+        return diaryPermissionItemId;
     }
 
     @Override
@@ -88,11 +98,11 @@ public class DiaryServiceImpl implements DiaryService{
 
     @Override
     public DiaryPermissionCheckResponse findDiaryPermission(long userId) {
-        diaryPermissionItemId = 3L;
-        Inventory inventory = inventoryRepository.findByUserIdAndItemId(userId, diaryPermissionItemId)
+        Long itemId = getDiaryPermissionItemId();
+        Inventory inventory = inventoryRepository.findByUserIdAndItemId(userId, itemId)
                 .orElseGet(() -> Inventory.builder()
                         .userId(userId)
-                        .itemId(diaryPermissionItemId)
+                        .itemId(itemId)
                         .count(0)
                         .build());
         return new DiaryPermissionCheckResponse(inventory.getUserId(), inventory.getItemId(), inventory.getCount());
@@ -163,7 +173,8 @@ public class DiaryServiceImpl implements DiaryService{
     }
 
     public void decreaseDiaryGenerationItemCount(Long userId) {
-        Inventory inventory = inventoryRepository.findByUserIdAndItemId(userId, diaryPermissionItemId)
+        Long itemId = getDiaryPermissionItemId();
+        Inventory inventory = inventoryRepository.findByUserIdAndItemId(userId, itemId)
                 .orElseThrow(() -> new NotFoundException("생성권 아이템이 없습니다."));
 
         if (inventory.getCount() <= 0) {
